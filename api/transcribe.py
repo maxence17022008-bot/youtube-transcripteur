@@ -23,6 +23,28 @@ def video_id(url):
         return None
     return v if re.fullmatch(r"[A-Za-z0-9_-]{11}", v) else None
 
+def timecode(milliseconds):
+    seconds = max(0, int(float(milliseconds) / 1000))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"[{hours:02d}:{minutes:02d}:{seconds:02d}]" if hours else f"[{minutes:02d}:{seconds:02d}]"
+
+def formatted_segments(content):
+    rows = []
+    for segment in content:
+        if not isinstance(segment, dict):
+            continue
+        words = str(segment.get("text", "")).strip()
+        if not words:
+            continue
+        offset = segment.get("offset")
+        if offset is None:
+            offset = segment.get("start")
+            if offset is not None:
+                offset = float(offset) * 1000
+        rows.append((timecode(offset) + " " if offset is not None else "") + words)
+    return "\\n".join(rows)
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
@@ -36,7 +58,7 @@ class handler(BaseHTTPRequestHandler):
             key = os.environ.get("SUPADATA_API_KEY", "").strip()
             if key:
                 endpoint = "https://api.supadata.ai/v1/transcript?" + urllib.parse.urlencode({
-                    "url": "https://www.youtube.com/watch?v=" + vid, "text": "true", "mode": "native"
+                    "url": "https://www.youtube.com/watch?v=" + vid, "text": "false", "mode": "native"
                 })
                 req = urllib.request.Request(endpoint, headers={"x-api-key": key, "Accept": "application/json"})
                 try:
@@ -51,9 +73,7 @@ class handler(BaseHTTPRequestHandler):
                 if payload.get("jobId"):
                     return self.reply(202, {"error": "Transcription en préparation. Réessayez dans quelques instants."})
                 content = payload.get("content", "")
-                result = content if isinstance(content, str) else "\n".join(
-                    segment.get("text", "") for segment in content if isinstance(segment, dict)
-                )
+                result = content if isinstance(content, str) else formatted_segments(content)
                 if not result.strip():
                     return self.reply(404, {"error": "Aucun sous-titre disponible pour cette vidéo."})
                 return self.reply(200, {"text": result, "language": payload.get("lang", "auto"), "videoId": vid})
@@ -63,7 +83,7 @@ class handler(BaseHTTPRequestHandler):
             except Exception:
                 track = next(iter(transcripts))
             lines = track.fetch()
-            text = "\n".join(x.text for x in lines if x.text.strip())
+            text = "\n".join(timecode(x.start * 1000) + " " + x.text for x in lines if x.text.strip())
             if not text:
                 return self.reply(404, {"error": "Sous-titres vides."})
             return self.reply(200, {"text": text, "language": track.language, "videoId": vid})
