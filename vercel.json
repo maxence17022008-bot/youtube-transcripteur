@@ -1,0 +1,1 @@
+{"version":2,"functions":{"api/transcribe.py":{"maxDuration":30}},"rewrites":[{"source":"/","destination":"/index.html"}]}
