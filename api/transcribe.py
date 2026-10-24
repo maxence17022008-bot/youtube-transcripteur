@@ -1,4 +1,8 @@
 import json
+import os
+import urllib.request
+import urllib.error
+import urllib.parse
 import re
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -29,6 +33,30 @@ class handler(BaseHTTPRequestHandler):
             vid = video_id(data.get("url", ""))
             if not vid:
                 return self.reply(400, {"error": "Lien YouTube invalide."})
+            key = os.environ.get("SUPADATA_API_KEY", "").strip()
+            if key:
+                endpoint = "https://api.supadata.ai/v1/transcript?" + urllib.parse.urlencode({
+                    "url": "https://www.youtube.com/watch?v=" + vid, "text": "true", "mode": "native"
+                })
+                req = urllib.request.Request(endpoint, headers={"x-api-key": key, "Accept": "application/json"})
+                try:
+                    with urllib.request.urlopen(req, timeout=22) as response:
+                        payload = json.load(response)
+                except urllib.error.HTTPError as exc:
+                    if exc.code in (401, 403):
+                        return self.reply(502, {"error": "Clé Supadata invalide ou accès refusé."})
+                    if exc.code == 429:
+                        return self.reply(429, {"error": "Quota Supadata atteint. Réessayez plus tard."})
+                    return self.reply(502, {"error": "Service de transcription indisponible (HTTP %s)." % exc.code})
+                if payload.get("jobId"):
+                    return self.reply(202, {"error": "Transcription en préparation. Réessayez dans quelques instants."})
+                content = payload.get("content", "")
+                result = content if isinstance(content, str) else "\n".join(
+                    segment.get("text", "") for segment in content if isinstance(segment, dict)
+                )
+                if not result.strip():
+                    return self.reply(404, {"error": "Aucun sous-titre disponible pour cette vidéo."})
+                return self.reply(200, {"text": result, "language": payload.get("lang", "auto"), "videoId": vid})
             transcripts = YouTubeTranscriptApi().list(vid)
             try:
                 track = transcripts.find_transcript(["fr", "fr-FR", "en"])
