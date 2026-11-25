@@ -1,6 +1,6 @@
-# 🎬 YouTube Transcripteur
+# 🎬 Transcripteur YouTube et Vimeo
 
-Application web Streamlit en français : collez un lien YouTube, récupérez les sous-titres accessibles, copiez-les ou téléchargez-les en .txt.
+Application web Streamlit en français : collez un lien YouTube ou Vimeo, récupérez les sous-titres accessibles, copiez-les ou téléchargez-les en .txt.
 
 ## Déploiement Streamlit Community Cloud
 1. Connectez-vous à https://share.streamlit.io/ via GitHub.
@@ -10,8 +10,8 @@ Application web Streamlit en français : collez un lien YouTube, récupérez les
 
 ## En local
 ```sh
-pip install -r requirements.txt
+pip install streamlit -r requirements.txt
 streamlit run app.py
 ```
 
-**Limites :** il faut des sous-titres accessibles (automatiques ou manuels). Cette application ne transcrit pas directement l'audio. YouTube peut bloquer les requêtes des hébergeurs cloud.
+**Limites :** il faut des sous-titres accessibles (automatiques ou manuels). Cette application ne transcrit pas directement l'audio. La plateforme vidéo peut bloquer les requêtes des hébergeurs cloud.

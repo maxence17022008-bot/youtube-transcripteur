@@ -7,6 +7,7 @@ import re
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from youtube_transcript_api import YouTubeTranscriptApi
+from vimeo_captions import VimeoError, parse_vimeo_url, vimeo_transcript
 
 def video_id(url):
     p = urlparse(url)
@@ -43,7 +44,7 @@ def formatted_segments(content):
             if offset is not None:
                 offset = float(offset) * 1000
         rows.append((timecode(offset) + " " if offset is not None else "") + words)
-    return "\\n".join(rows)
+    return "\n".join(rows)
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -52,9 +53,21 @@ class handler(BaseHTTPRequestHandler):
             if size < 1 or size > 4096:
                 return self.reply(400, {"error": "Requête invalide."})
             data = json.loads(self.rfile.read(size))
-            vid = video_id(data.get("url", ""))
+            url = data.get("url") if isinstance(data, dict) else None
+            if not isinstance(url, str):
+                return self.reply(400, {"error": "Lien YouTube ou Vimeo invalide."})
+            vimeo = parse_vimeo_url(url)
+            if vimeo:
+                try:
+                    language, segments = vimeo_transcript(*vimeo)
+                except VimeoError as exc:
+                    return self.reply(exc.status, {"error": str(exc)})
+                except (ValueError, OSError):
+                    return self.reply(502, {"error": "Réponse Vimeo illisible. Réessayez plus tard."})
+                return self.reply(200, {"text": formatted_segments(segments), "language": language, "videoId": vimeo[0]})
+            vid = video_id(url.strip())
             if not vid:
-                return self.reply(400, {"error": "Lien YouTube invalide."})
+                return self.reply(400, {"error": "Lien YouTube ou Vimeo invalide."})
             key = os.environ.get("SUPADATA_API_KEY", "").strip()
             if key:
                 endpoint = "https://api.supadata.ai/v1/transcript?" + urllib.parse.urlencode({
